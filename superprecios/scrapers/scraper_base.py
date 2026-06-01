@@ -34,11 +34,20 @@ ALERT_THRESHOLD = 0.5   # 50 %
 # ── Cabeceras HTTP para scraping responsable ──────────────────────
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (compatible; SuperPreciosBot/1.0; "
-        "+https://superprecios.local/bot)"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/148.0.0.0 Safari/537.36"
     ),
+    "Accept": "application/json, text/plain, */*",
     "Accept-Language": "es-CL,es;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.jumbo.cl/",
+    "sec-ch-ua": '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
 }
 
 
@@ -144,6 +153,76 @@ class ScraperBase(ABC):
             self.logger.error("Error al obtener %s: %s", url, exc)
             return None
 
+    def get_json(self, url: str) -> list | dict | None:
+        """
+        Descarga un endpoint JSON con delay aleatorio.
+        Retorna el objeto Python parseado, o None ante error.
+        """
+        import time, random
+        time.sleep(random.uniform(1, 3))
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as exc:
+            self.logger.error("Error al obtener JSON %s: %s", url, exc)
+            return None
+        except ValueError as exc:
+            self.logger.error("Respuesta no es JSON válido en %s: %s", url, exc)
+            return None
+        
+    def get_json_params(self, url: str, params: dict) -> dict | None:
+        """
+        Descarga un endpoint JSON con query params explícitos y delay aleatorio.
+        """
+        import time, random
+        time.sleep(random.uniform(1, 3))
+        try:
+            resp = requests.get(url, headers=HEADERS, params=params, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as exc:
+            self.logger.error("Error al obtener JSON %s: %s", url, exc)
+            return None
+        except ValueError as exc:
+            self.logger.error("Respuesta no es JSON válido en %s: %s", url, exc)
+            return None
+        
+
+    def post_json(self, url: str, payload: dict, extra_headers: dict = {}) -> dict | None:
+        """POST con body JSON y delay aleatorio."""
+        import time, random
+        time.sleep(random.uniform(1, 3))
+        headers = {**HEADERS, "Content-Type": "application/json", **extra_headers}
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as exc:
+            self.logger.error("Error POST %s: %s", url, exc)
+            return None
+        except ValueError as exc:
+            self.logger.error("Respuesta no es JSON válido en %s: %s", url, exc)
+            return None
+        
+
+    def get_json_params_headers(self, url: str, params: dict, extra_headers: dict) -> dict | None:
+        """GET con params y headers adicionales."""
+        import time, random
+        time.sleep(random.uniform(1, 3))
+        headers = {**HEADERS, **extra_headers}
+        try:
+            resp = requests.get(url, headers=headers, params=params, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as exc:
+            self.logger.error("Error al obtener JSON %s: %s", url, exc)
+            return None
+        except ValueError as exc:
+            self.logger.error("Respuesta no es JSON válido en %s: %s", url, exc)
+            return None
+        
+        
     # ── Ciclo principal ───────────────────────────────────────────
 
     def run_once(self):

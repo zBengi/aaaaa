@@ -50,7 +50,7 @@ services:
       dockerfile: Dockerfile
     container_name: aggregator
     environment:
-      RABBITMQ_HOST: "${RABBITMQ_HOST:-192.168.1.10}"   # IP interna del Servidor 1
+      RABBITMQ_HOST: rabbitmq #"${RABBITMQ_HOST:-192.168.1.10}"   # IP interna del Servidor 1
       RABBITMQ_PORT: "5672"
       RABBITMQ_QUEUE: precios_queue
       DATABASE_URL: postgresql://superprecios_user:superprecios_pass@postgres:5432/superprecios
@@ -59,6 +59,7 @@ services:
         condition: service_healthy
     networks:
       - app_net
+      - superprecios_scraping_net
     restart: unless-stopped
 
   api:
@@ -100,3 +101,5 @@ volumes:
 networks:
   app_net:
     driver: bridge
+  superprecios_scraping_net:
+    external: true

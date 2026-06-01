@@ -58,3 +58,69 @@ INSERT INTO supermercados (nombre, url_base, activo) VALUES
     ('Lider',    'https://www.lider.cl',    TRUE),
     ('Unimarc',  'https://www.unimarc.cl',  TRUE)
 ON CONFLICT (nombre) DO NOTHING;
+
+
+-- ================================================================
+--  DATOS DE PRUEBA – permiten validar la API y el frontend
+--  antes de que los scrapers hayan ejecutado su primer ciclo.
+-- ================================================================
+
+INSERT INTO productos (nombre, categoria, codigo_barra) VALUES
+    ('Leche Entera Colun 1L',         'alimentos', '7802900001001'),
+    ('Leche Semidescremada Soprole 1L','alimentos', '7802900002002'),
+    ('Yogur Natural Nestlé 1kg',       'alimentos', '7802900003003'),
+    ('Mantequilla Colun 200g',         'alimentos', '7802900004004'),
+    ('Shampoo Head & Shoulders 375ml', 'higiene',   '7509546614797'),
+    ('Jabón Dove 90g',                 'higiene',   '7791293021552'),
+    ('Pasta de dientes Colgate 75ml',  'higiene',   '7509546034890'),
+    ('Detergente Omo 1kg',             'limpieza',  '7891150033954'),
+    ('Limpiapisos Fabuloso 1L',        'limpieza',  '7048900009009'),
+    ('Esponja Scotch-Brite x3',        'limpieza',  '7048900010010')
+ON CONFLICT (codigo_barra) DO NOTHING;
+
+INSERT INTO precios (producto_id, supermercado_id, precio, registrado_en)
+SELECT p.id, s.id,
+       CASE
+           WHEN s.nombre = 'Jumbo'   THEN precio_base
+           WHEN s.nombre = 'Lider'   THEN precio_base * 0.95
+           WHEN s.nombre = 'Unimarc' THEN precio_base * 1.03
+       END,
+       NOW() - (random() * interval '2 hours')
+FROM (
+    VALUES
+        ('Leche Entera Colun 1L',          1290),
+        ('Leche Semidescremada Soprole 1L', 1390),
+        ('Yogur Natural Nestlé 1kg',        2490),
+        ('Mantequilla Colun 200g',          2190),
+        ('Shampoo Head & Shoulders 375ml',  4990),
+        ('Jabón Dove 90g',                   890),
+        ('Pasta de dientes Colgate 75ml',   1990),
+        ('Detergente Omo 1kg',              4290),
+        ('Limpiapisos Fabuloso 1L',         1590),
+        ('Esponja Scotch-Brite x3',         1290)
+) AS t(nombre_producto, precio_base)
+JOIN productos p ON p.nombre = t.nombre_producto
+CROSS JOIN supermercados s
+ON CONFLICT DO NOTHING;
+
+-- Registros históricos (últimas 48h) para que el gráfico tenga datos
+INSERT INTO precios (producto_id, supermercado_id, precio, registrado_en)
+SELECT p.id, s.id,
+       CASE
+           WHEN s.nombre = 'Jumbo'   THEN precio_base * (1 + (random() - 0.5) * 0.08)
+           WHEN s.nombre = 'Lider'   THEN precio_base * 0.95 * (1 + (random() - 0.5) * 0.08)
+           WHEN s.nombre = 'Unimarc' THEN precio_base * 1.03 * (1 + (random() - 0.5) * 0.08)
+       END,
+       NOW() - (n * interval '6 hours')
+FROM (
+    VALUES
+        ('Leche Entera Colun 1L',          1290),
+        ('Leche Semidescremada Soprole 1L', 1390),
+        ('Yogur Natural Nestlé 1kg',        2490),
+        ('Shampoo Head & Shoulders 375ml',  4990),
+        ('Detergente Omo 1kg',              4290)
+) AS t(nombre_producto, precio_base)
+JOIN productos p ON p.nombre = t.nombre_producto
+CROSS JOIN supermercados s
+CROSS JOIN generate_series(1, 8) AS n
+ON CONFLICT DO NOTHING;

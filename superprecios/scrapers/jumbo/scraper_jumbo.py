@@ -1,123 +1,111 @@
 """
 scraper_jumbo.py – Scraper para Jumbo Chile.
-
-Extrae productos de las categorías prioritarias: alimentos,
-higiene personal y limpieza del hogar.
-
-NOTA: Los selectores CSS están definidos como constantes al inicio
-del archivo para facilitar su actualización si el sitio cambia
-su estructura HTML.
+Usa la API de Constructor.io con términos de búsqueda reales.
 """
 
-import sys
-import os
-
+import sys, os, uuid
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from scraper_base import ScraperBase, PrecioMessage
 
-# ── Selectores CSS (actualizar si cambia la estructura del sitio) ─
-SEL_PRODUCTO_CARD  = "div.product-item"
-SEL_NOMBRE         = "span.product-item__name"
-SEL_PRECIO         = "span.product-item__price"
-SEL_CODIGO_BARRA   = "span[data-ean]"
-SEL_CATEGORIA_META = "meta[property='product:category']"
+API_BASE = "https://pwcdauseo-zone.cnstrc.com/search"
+API_KEY  = "key_JopvNXKS61kwGkBe"
 
-# ── URLs por categoría prioritaria ────────────────────────────────
+# Términos de búsqueda reales por categoría
 CATEGORIAS = {
-    "alimentos":  "https://www.jumbo.cl/categoria/alimentos",
-    "higiene":    "https://www.jumbo.cl/categoria/higiene-personal",
-    "limpieza":   "https://www.jumbo.cl/categoria/limpieza-del-hogar",
+    "alimentos": ["leche", "yogur", "mantequilla", "queso", "huevos"],
+    "higiene":   ["shampoo", "jabon", "pasta dental", "desodorante"],
+    "limpieza":  ["detergente", "cloro", "limpiapisos", "esponja"],
 }
 
-MAX_PAGINAS_POR_CATEGORIA = 5   # límite de páginas por categoría
+RESULTADOS_POR_PAGINA = 30
+MAX_PAGINAS           = 5
 
 
 class ScraperJumbo(ScraperBase):
 
     def __init__(self):
         super().__init__("jumbo")
+        self._client_id  = str(uuid.uuid4())
+        self._session_id = 1
 
     def scrape(self) -> list[PrecioMessage]:
-        mensajes: list[PrecioMessage] = []
-
-        for categoria, url_base in CATEGORIAS.items():
-            self.logger.info("Scrapeando categoría '%s' en Jumbo…", categoria)
-
-            for pagina in range(1, MAX_PAGINAS_POR_CATEGORIA + 1):
-                url = f"{url_base}?page={pagina}"
-                soup = self.get_page(url)
-                if soup is None:
-                    break
-
-                cards = soup.select(SEL_PRODUCTO_CARD)
-                if not cards:
-                    self.logger.debug(
-                        "Sin productos en página %d de '%s'; fin de categoría.",
-                        pagina, categoria,
-                    )
-                    break
-
-                for card in cards:
-                    msg = self._parse_card(card, categoria, url)
-                    if msg:
-                        mensajes.append(msg)
-
+        mensajes = []
+        for categoria, terminos in CATEGORIAS.items():
+            for termino in terminos:
+                self.logger.info("Jumbo: buscando '%s' (%s)…", termino, categoria)
+                mensajes.extend(self._scrape_termino(categoria, termino))
         self.logger.info("Jumbo: %d productos extraídos.", len(mensajes))
         return mensajes
 
-    def _parse_card(
-        self,
-        card,
-        categoria: str,
-        url_pagina: str,
-    ) -> PrecioMessage | None:
+    def _scrape_termino(self, categoria: str, termino: str) -> list[PrecioMessage]:
+        mensajes = []
+        for pagina in range(1, MAX_PAGINAS + 1):
+            params = {
+                "key":                  API_KEY,
+                "c":                    "ciojs-2.1418.5",
+                "i":                    self._client_id,
+                "s":                    self._session_id,
+                "section":              "Products",
+                "page":                 pagina,
+                "num_results_per_page": RESULTADOS_POR_PAGINA,
+                "canonical_url":        "https://www.jumbo.cl/busqueda",
+                "origin_referrer":      "www.jumbo.cl/busqueda",
+                "fmt_options[groups_start]": "current",
+                "fmt_options[groups_max_depth]": "1",
+            }
+            data = self.get_json_params(f"{API_BASE}/{termino}", params)
+            if not data:
+                break
+
+            items = data.get("response", {}).get("results", [])
+            if not items:
+                break
+
+            for item in items:
+                msg = self._parse_item(item, categoria)
+                if msg:
+                    mensajes.append(msg)
+
+            total = data.get("response", {}).get("total_num_results", 0)
+            if pagina * RESULTADOS_POR_PAGINA >= total:
+                break
+
+        return mensajes
+
+    def _parse_item(self, item: dict, categoria: str) -> PrecioMessage | None:
         try:
-            nombre_tag = card.select_one(SEL_NOMBRE)
-            precio_tag = card.select_one(SEL_PRECIO)
+            d = item.get("data", {})
 
-            if not nombre_tag or not precio_tag:
+            nombre = d.get("ProductName") or d.get("value") or item.get("value", "")
+            nombre = nombre.strip()
+            if not nombre:
                 return None
 
-            nombre = nombre_tag.get_text(strip=True)
-            precio_raw = precio_tag.get_text(strip=True)
-            precio = self._parse_precio(precio_raw)
-            if precio is None:
+            # Usar sellingPrice (precio con descuento) o price
+            precio = d.get("sellingPrice") or d.get("price")
+            if not precio or float(precio) <= 0:
                 return None
 
-            codigo_tag = card.select_one(SEL_CODIGO_BARRA)
-            codigo_barra = (
-                codigo_tag["data-ean"] if codigo_tag else None
-            )
+            # Sin código de barra en esta API, usar RefId como referencia
+            codigo_barra = d.get("RefId") or None
 
-            url_producto = url_pagina
-            enlace = card.find("a", href=True)
-            if enlace:
-                href = enlace["href"]
-                url_producto = (
-                    href if href.startswith("http")
-                    else f"https://www.jumbo.cl{href}"
-                )
+            url_producto = d.get("url", "")
+            if url_producto and not url_producto.startswith("http"):
+                url_producto = f"https://www.jumbo.cl{url_producto}"
+            if not url_producto:
+                url_producto = "https://www.jumbo.cl"
 
             return PrecioMessage(
                 supermercado="Jumbo",
                 nombre_producto=nombre,
                 categoria=categoria,
-                codigo_barra=codigo_barra,
-                precio=precio,
+                codigo_barra=str(codigo_barra) if codigo_barra else None,
+                precio=float(precio),
                 url_producto=url_producto,
             )
         except Exception as exc:
-            self.logger.warning("Error parseando card de Jumbo: %s", exc)
-            return None
-
-    @staticmethod
-    def _parse_precio(texto: str) -> float | None:
-        """Convierte '$1.299' → 1299.0"""
-        try:
-            limpio = texto.replace("$", "").replace(".", "").replace(",", ".").strip()
-            return float(limpio)
-        except ValueError:
+            self.logger.warning("Error parseando item Jumbo: %s", exc)
             return None
 
 

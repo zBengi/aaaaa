@@ -77,4 +77,5 @@ volumes:
 
 networks:
   scraping_net:
+    name: superprecios_scraping_net
     driver: bridge
