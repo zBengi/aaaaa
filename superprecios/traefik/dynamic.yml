@@ -1,0 +1,11 @@
+# traefik/dynamic.yml
+# Configuración dinámica de Traefik: reglas de enrutamiento adicionales.
+# Los servicios principales se configuran vía labels en docker-compose.server2.yml.
+
+http:
+  middlewares:
+    # Strip prefijo /api antes de reenviar a FastAPI
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - "/api"

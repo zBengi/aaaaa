@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────
+#  SERVIDOR 1 – Scrapers + RabbitMQ + Scheduler
+# ─────────────────────────────────────────────
+
+services:
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"       # AMQP
+      - "15672:15672"     # Management UI (desarrollo)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - scraping_net
+
+  scraper_jumbo:
+    build:
+      context: ./scrapers
+      dockerfile: jumbo/Dockerfile
+    container_name: scraper_jumbo
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_QUEUE: precios_queue
+      SCRAPER_NAME: jumbo
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scraping_net
+    restart: unless-stopped
+
+  scraper_lider:
+    build:
+      context: ./scrapers
+      dockerfile: lider/Dockerfile
+    container_name: scraper_lider
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_QUEUE: precios_queue
+      SCRAPER_NAME: lider
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scraping_net
+    restart: unless-stopped
+
+  scraper_unimarc:
+    build:
+      context: ./scrapers
+      dockerfile: unimarc/Dockerfile
+    container_name: scraper_unimarc
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_QUEUE: precios_queue
+      SCRAPER_NAME: unimarc
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - scraping_net
+    restart: unless-stopped
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  scraping_net:
+    driver: bridge
