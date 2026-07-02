@@ -1,0 +1,342 @@
+/* ================================================================
+   SuperPrecios – Estilos globales
+   Diseño responsive: mobile-first, compatible con escritorio.
+================================================================ */
+
+/* ── Reset & variables ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --color-bg:        #f5f7fa;
+  --color-surface:   #ffffff;
+  --color-primary:   #1a5276;
+  --color-accent:    #e74c3c;
+  --color-text:      #2c3e50;
+  --color-muted:     #7f8c8d;
+  --color-border:    #dce1e7;
+  --color-cheaper:   #eafaf1;
+  --color-cheaper-border: #27ae60;
+  --radius:          10px;
+  --shadow:          0 2px 8px rgba(0,0,0,.08);
+  --max-width:       1100px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ────────────────────────────────────────────────────── */
+.app-header {
+  background: var(--color-primary);
+  color: #fff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+}
+.app-header__logo {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+}
+.app-header__tagline {
+  font-size: .85rem;
+  opacity: .75;
+}
+
+/* ── Footer ────────────────────────────────────────────────────── */
+.app-footer {
+  margin-top: auto;
+  text-align: center;
+  padding: 1.2rem;
+  font-size: .8rem;
+  color: var(--color-muted);
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── Contenedores de página ─────────────────────────────────────── */
+.page-home,
+.page-detail {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  width: 100%;
+}
+
+/* ── Hero ───────────────────────────────────────────────────────── */
+.hero {
+  text-align: center;
+  padding: 2.5rem 1rem 2rem;
+}
+.hero__title {
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  font-weight: 800;
+  color: var(--color-primary);
+}
+.hero__subtitle {
+  color: var(--color-muted);
+  margin: .5rem 0 1.5rem;
+  font-size: 1.05rem;
+}
+
+/* ── SearchBar ──────────────────────────────────────────────────── */
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  justify-content: center;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.search-input {
+  flex: 1 1 220px;
+  padding: .7rem 1rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color .2s;
+}
+.search-input:focus { border-color: var(--color-primary); }
+.search-select {
+  padding: .7rem .9rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: .95rem;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+.search-btn {
+  padding: .7rem 1.5rem;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s;
+}
+.search-btn:hover { background: #154360; }
+
+/* ── Resultados ─────────────────────────────────────────────────── */
+.results-count {
+  margin: 1.5rem 0 .8rem;
+  color: var(--color-muted);
+  font-size: .95rem;
+}
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+/* ── ProductCard ─────────────────────────────────────────────────── */
+.product-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  cursor: pointer;
+  transition: box-shadow .2s, transform .15s;
+  box-shadow: var(--shadow);
+}
+.product-card:hover {
+  box-shadow: 0 6px 18px rgba(0,0,0,.12);
+  transform: translateY(-2px);
+}
+.product-card__categoria {
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--color-muted);
+}
+.product-card__nombre {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: .3rem 0 .8rem;
+  line-height: 1.3;
+}
+.product-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.product-card__precio {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+.product-card__tiendas {
+  font-size: .8rem;
+  color: var(--color-muted);
+}
+
+/* ── Paginación ─────────────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+.pagination__btn {
+  padding: .5rem 1.1rem;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s, color .2s;
+}
+.pagination__btn:hover:not(:disabled) { background: var(--color-primary); color: #fff; }
+.pagination__btn:disabled { opacity: .4; cursor: default; }
+.pagination__info { color: var(--color-muted); font-size: .9rem; }
+
+/* ── Página de detalle ──────────────────────────────────────────── */
+.back-link {
+  display: inline-block;
+  margin-bottom: 1.2rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.back-link:hover { text-decoration: underline; }
+
+.product-header { margin-bottom: 1.5rem; }
+.product-header__categoria {
+  font-size: .8rem;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  letter-spacing: .06em;
+}
+.product-header__nombre {
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+  font-weight: 700;
+  margin: .25rem 0 .3rem;
+}
+.product-header__barcode { font-size: .85rem; color: var(--color-muted); }
+
+.section-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.3rem 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+}
+.section-card__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  padding-bottom: .5rem;
+  border-bottom: 2px solid var(--color-bg);
+}
+
+/* ── PriceComparison ─────────────────────────────────────────────── */
+.price-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .7rem .8rem;
+  border-radius: 6px;
+  margin-bottom: .4rem;
+  border: 1px solid transparent;
+  transition: background .2s;
+}
+.price-row:hover { background: var(--color-bg); }
+.price-row--cheaper {
+  background: var(--color-cheaper);
+  border-color: var(--color-cheaper-border);
+}
+.price-row__supermercado {
+  flex: 1;
+  font-weight: 600;
+  border-left: 4px solid var(--color-muted);
+  padding-left: .6rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.badge-barato {
+  background: var(--color-cheaper-border);
+  color: #fff;
+  font-size: .7rem;
+  padding: .15rem .45rem;
+  border-radius: 99px;
+  font-weight: 700;
+}
+.price-row__precio {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  min-width: 100px;
+  text-align: right;
+}
+.price-row__fecha {
+  font-size: .78rem;
+  color: var(--color-muted);
+  min-width: 110px;
+  text-align: right;
+}
+.saving-hint {
+  margin-top: .8rem;
+  font-size: .9rem;
+  color: #1e8449;
+  background: var(--color-cheaper);
+  padding: .6rem .9rem;
+  border-radius: 6px;
+}
+
+/* ── Historial filtros ───────────────────────────────────────────── */
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .7rem;
+  align-items: center;
+  margin-bottom: 1.1rem;
+}
+.period-btns { display: flex; gap: .4rem; flex-wrap: wrap; }
+.period-btn {
+  padding: .38rem .8rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 99px;
+  background: transparent;
+  font-size: .85rem;
+  cursor: pointer;
+  transition: all .15s;
+}
+.period-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.period-btn--active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.history-count { margin-top: .7rem; font-size: .82rem; color: var(--color-muted); }
+
+/* ── Mensajes de estado ──────────────────────────────────────────── */
+.status-msg { text-align: center; padding: 1rem; color: var(--color-muted); }
+.status-msg--error { color: var(--color-accent); }
+.empty-msg { text-align: center; color: var(--color-muted); padding: 1.5rem 0; }
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .price-row__fecha { display: none; }
+  .price-row { flex-wrap: wrap; }
+  .price-row__precio { min-width: unset; }
+  .product-grid { grid-template-columns: 1fr; }
+  .search-bar { flex-direction: column; }
+  .search-input, .search-btn, .search-select { width: 100%; }
+}
