@@ -1,0 +1,238 @@
+# =============================================================================
+#  SuperTracker — Orquestación completa con Docker Compose
+# -----------------------------------------------------------------------------
+#  Levanta TODO el sistema distribuido en un solo host de evaluación:
+#
+#    [ Capa de recolección — "Servidor 1" en el modelo físico ]
+#       · rabbitmq            broker de mensajes (Pub/Sub)
+#       · scraper-jumbo       publican precios en la cola
+#       · scraper-lider
+#       · scraper-unimarc
+#
+#    [ Capa de consolidación y servicio — "Servidor 2" ]
+#       · postgres            base de datos relacional
+#       · aggregator          consume la cola y persiste en PostgreSQL
+#       · api                 API REST (FastAPI) de lectura
+#       · frontend            SPA React servida por Nginx
+#       · traefik             reverse proxy / API gateway (puerto 80)
+#
+#  Uso:   cp .env.example .env   &&   docker compose up --build
+#  Web:   http://localhost           (frontend)
+#  API:   http://localhost/api/health
+#  Traefik dashboard (solo dev): http://localhost:8080
+# =============================================================================
+
+name: supertracker
+
+services:
+  # ---------------------------------------------------------------- Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: st-rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-supertracker}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-supertracker}
+    ports:
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672" # consola de administración (dev)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 25s
+    networks: [collection, backbone]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- Base de datos
+  postgres:
+    image: postgres:16-alpine
+    container_name: st-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-supertracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supertracker}
+      POSTGRES_DB: ${POSTGRES_DB:-supertracker}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # Carga el esquema + seed la primera vez que se crea el volumen.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-supertracker} -d ${POSTGRES_DB:-supertracker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [data]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- Agregador
+  aggregator:
+    build: ./aggregator
+    container_name: st-aggregator
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-supertracker}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-supertracker}
+      PRICES_QUEUE: ${PRICES_QUEUE:-precios}
+      PRICES_EXCHANGE: ${PRICES_EXCHANGE:-precios.exchange}
+      PRICES_ROUTING_KEY: ${PRICES_ROUTING_KEY:-precios.nuevo}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-supertracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supertracker}
+      POSTGRES_DB: ${POSTGRES_DB:-supertracker}
+      PREFETCH_COUNT: ${PREFETCH_COUNT:-20}
+      AGGREGATOR_HEALTH_PORT: 8001
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [backbone, data]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- API REST
+  api:
+    build: ./api
+    container_name: st-api
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-supertracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supertracker}
+      POSTGRES_DB: ${POSTGRES_DB:-supertracker}
+      API_PORT: 8000
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      DEFAULT_PAGE_SIZE: ${DEFAULT_PAGE_SIZE:-20}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.routers.api.priority=10"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
+    networks: [data, edge]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- Scrapers
+  # Tres servicios con la MISMA imagen; se diferencian por la variable STORE.
+  scraper-jumbo:
+    build: ./scrapers
+    container_name: st-scraper-jumbo
+    environment: &scraper_env
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-supertracker}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-supertracker}
+      PRICES_QUEUE: ${PRICES_QUEUE:-precios}
+      PRICES_EXCHANGE: ${PRICES_EXCHANGE:-precios.exchange}
+      PRICES_ROUTING_KEY: ${PRICES_ROUTING_KEY:-precios.nuevo}
+      SCRAPER_MODE: ${SCRAPER_MODE:-mock}
+      SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-60}
+      RUN_ON_STARTUP: ${RUN_ON_STARTUP:-true}
+      MAX_PRODUCTS_PER_STORE: ${MAX_PRODUCTS_PER_STORE:-500}
+      SCRAPER_DELAY_SECONDS: ${SCRAPER_DELAY_SECONDS:-1.5}
+      STORE: jumbo
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks: [collection]
+    restart: unless-stopped
+
+  scraper-lider:
+    build: ./scrapers
+    container_name: st-scraper-lider
+    environment:
+      <<: *scraper_env
+      STORE: lider
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks: [collection]
+    restart: unless-stopped
+
+  scraper-unimarc:
+    build: ./scrapers
+    container_name: st-scraper-unimarc
+    environment:
+      <<: *scraper_env
+      STORE: unimarc
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks: [collection]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- Frontend
+  frontend:
+    build: ./frontend
+    container_name: st-frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+    networks: [edge]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- Reverse proxy
+  traefik:
+    image: traefik:v2.11
+    container_name: st-traefik
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--api.dashboard=true"
+      - "--api.insecure=true" # dashboard sin auth: SOLO entorno de evaluación
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+    volumes:
+      # Traefik observa el socket de Docker para descubrir servicios por labels.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [edge]
+    restart: unless-stopped
+
+# -----------------------------------------------------------------------------
+#  Redes: segmentan el tráfico igual que en el modelo físico de dos servidores.
+#   · collection  scrapers  <->  rabbitmq        (Servidor 1)
+#   · backbone    rabbitmq  <->  aggregator      (enlace entre servidores)
+#   · data        aggregator/api  <->  postgres  (Servidor 2, interna)
+#   · edge        traefik <-> frontend/api       (capa pública)
+# -----------------------------------------------------------------------------
+networks:
+  collection:
+    driver: bridge
+  backbone:
+    driver: bridge
+  data:
+    driver: bridge
+  edge:
+    driver: bridge
+
+volumes:
+  rabbitmq_data:
+  pg_data:

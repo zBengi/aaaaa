@@ -1,0 +1,157 @@
+# ─────────────────────────────────────────────
+#  SERVIDOR 1 – Scrapers + RabbitMQ + Scheduler
+# ─────────────────────────────────────────────
+
+services:
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    hostname: rabbitmq
+    environment:
+      # Usuario admin propio — reemplaza al "guest" por defecto (que
+      # además Rabbit bloquea para conexiones no-localhost).
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?falta RABBITMQ_DEFAULT_USER en .env.server1}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?falta RABBITMQ_DEFAULT_PASS en .env.server1}
+    ports:
+      - "5672:5672"                 # AMQP — sigue expuesto para el Servidor 2;
+                                     # restringir por firewall/VPN, ver README seguridad.
+      - "127.0.0.1:15672:15672"     # Management UI SOLO accesible por localhost/túnel SSH
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    networks:
+      - scraping_net
+
+  # Corre una sola vez al levantar el stack: crea los usuarios de
+  # mínimo privilegio (publisher/consumer) vía la Management API.
+  rabbitmq-init:
+    image: curlimages/curl:8.9.1
+    container_name: rabbitmq_init
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?falta RABBITMQ_DEFAULT_USER en .env.server1}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?falta RABBITMQ_DEFAULT_PASS en .env.server1}
+      RABBITMQ_PUBLISHER_USER: ${RABBITMQ_PUBLISHER_USER:?falta RABBITMQ_PUBLISHER_USER en .env.server1}
+      RABBITMQ_PUBLISHER_PASS: ${RABBITMQ_PUBLISHER_PASS:?falta RABBITMQ_PUBLISHER_PASS en .env.server1}
+      RABBITMQ_CONSUMER_USER: ${RABBITMQ_CONSUMER_USER:?falta RABBITMQ_CONSUMER_USER en .env.server1}
+      RABBITMQ_CONSUMER_PASS: ${RABBITMQ_CONSUMER_PASS:?falta RABBITMQ_CONSUMER_PASS en .env.server1}
+      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE:-precios_queue}
+    entrypoint: ["sh", "/scripts/init-users.sh"]
+    volumes:
+      - ./rabbitmq/init-users.sh:/scripts/init-users.sh:ro
+    networks:
+      - scraping_net
+    restart: "no"
+
+  scraper_jumbo:
+    build:
+      context: ./scrapers
+      dockerfile: jumbo/Dockerfile
+    container_name: scraper_jumbo
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_QUEUE: precios_queue
+      RABBITMQ_USER: ${RABBITMQ_PUBLISHER_USER:?falta RABBITMQ_PUBLISHER_USER en .env.server1}
+      RABBITMQ_PASS: ${RABBITMQ_PUBLISHER_PASS:?falta RABBITMQ_PUBLISHER_PASS en .env.server1}
+      SCRAPER_NAME: jumbo
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      rabbitmq-init:
+        condition: service_completed_successfully
+    networks:
+      - scraping_net
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  scraper_lider:
+    build:
+      context: ./scrapers
+      dockerfile: lider/Dockerfile
+    container_name: scraper_lider
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_QUEUE: precios_queue
+      RABBITMQ_USER: ${RABBITMQ_PUBLISHER_USER:?falta RABBITMQ_PUBLISHER_USER en .env.server1}
+      RABBITMQ_PASS: ${RABBITMQ_PUBLISHER_PASS:?falta RABBITMQ_PUBLISHER_PASS en .env.server1}
+      SCRAPER_NAME: lider
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      rabbitmq-init:
+        condition: service_completed_successfully
+    networks:
+      - scraping_net
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  scraper_unimarc:
+    build:
+      context: ./scrapers
+      dockerfile: unimarc/Dockerfile
+    container_name: scraper_unimarc
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_QUEUE: precios_queue
+      RABBITMQ_USER: ${RABBITMQ_PUBLISHER_USER:?falta RABBITMQ_PUBLISHER_USER en .env.server1}
+      RABBITMQ_PASS: ${RABBITMQ_PUBLISHER_PASS:?falta RABBITMQ_PUBLISHER_PASS en .env.server1}
+      SCRAPER_NAME: unimarc
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      rabbitmq-init:
+        condition: service_completed_successfully
+    networks:
+      - scraping_net
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  scraping_net:
+    name: superprecios_scraping_net
+    driver: bridge
