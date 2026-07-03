@@ -1,0 +1,24 @@
+# Secretos — NUNCA versionar
+.env
+.env.*
+!*.env.example
+!.env.*.example
+*.pem
+*.key
+acme.json
+
+# Node / frontend
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Docker / datos locales
+postgres_data/
+rabbitmq_data/
+
+# Sistema
+.DS_Store
